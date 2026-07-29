@@ -62,5 +62,63 @@ const registerUser = async (req, res) => {
   }
 };
 
+const loginUser = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
+    }
+    const user = await User.findOne({ email });
 
-module.exports = {registerUser}
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+    const isPasswordMatched = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordMatched) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+    const token = jwt.sign(
+      { id: user._id, username: user.username },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.ACCESS_TOKEN_EXPIRY },
+    );
+
+    const cookieOption = {
+      httpOnly: true,
+      secure: false,
+      sameSite: "strict",
+      maxAge: Number(process.env.COOKIE_MAX_AGE),
+    };
+
+    return res
+      .status(200)
+      .cookie("accessToken", token, cookieOption)
+      .json({
+        success: true,
+        message: "User logged in successfully",
+        data: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+        },
+      });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+module.exports = { registerUser, loginUser };
